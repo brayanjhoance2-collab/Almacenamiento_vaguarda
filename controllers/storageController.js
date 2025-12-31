@@ -44,6 +44,21 @@ exports.uploadFile = async (req, res) => {
 
     const file = req.files.file;
     const usuario_id = req.usuario.id;
+    const { carpeta_id } = req.body;
+
+    if (carpeta_id) {
+      const [carpetas] = await db.execute(
+        'SELECT * FROM carpetas_usuario WHERE id = ? AND usuario_id = ? AND eliminado = 0',
+        [carpeta_id, usuario_id]
+      );
+
+      if (carpetas.length === 0) {
+        return res.status(404).json({
+          exito: false,
+          mensaje: 'Carpeta no encontrada'
+        });
+      }
+    }
 
     const [stats] = await db.execute(
       'SELECT COALESCE(SUM(size), 0) as total_usado FROM archivos_usuario WHERE usuario_id = ? AND eliminado = 0',
@@ -80,9 +95,9 @@ exports.uploadFile = async (req, res) => {
 
     await db.execute(
       `INSERT INTO archivos_usuario 
-      (id, usuario_id, nombre_original, nombre_storage, size, mime_type, bucket) 
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [fileId, usuario_id, file.name, fileName, file.size, detectedMimeType, 'user-files']
+      (id, usuario_id, nombre_original, nombre_storage, size, mime_type, bucket, carpeta_id) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [fileId, usuario_id, file.name, fileName, file.size, detectedMimeType, 'user-files', carpeta_id || null]
     );
 
     res.json({
@@ -92,7 +107,8 @@ exports.uploadFile = async (req, res) => {
         file_id: fileId,
         nombre: file.name,
         size: file.size,
-        mime_type: detectedMimeType
+        mime_type: detectedMimeType,
+        carpeta_id: carpeta_id || null
       }
     });
 
@@ -108,14 +124,26 @@ exports.uploadFile = async (req, res) => {
 exports.listFiles = async (req, res) => {
   try {
     const usuario_id = req.usuario.id;
+    const { carpeta_id } = req.query;
 
-    const [files] = await db.execute(
-      `SELECT id, nombre_original, size, mime_type, fecha_subida 
+    let query = `
+      SELECT id, nombre_original, size, mime_type, fecha_subida, carpeta_id 
       FROM archivos_usuario 
-      WHERE usuario_id = ? AND eliminado = 0 
-      ORDER BY fecha_subida DESC`,
-      [usuario_id]
-    );
+      WHERE usuario_id = ? AND eliminado = 0
+    `;
+
+    const params = [usuario_id];
+
+    if (carpeta_id) {
+      query += ' AND carpeta_id = ?';
+      params.push(carpeta_id);
+    } else {
+      query += ' AND carpeta_id IS NULL';
+    }
+
+    query += ' ORDER BY fecha_subida DESC';
+
+    const [files] = await db.execute(query, params);
 
     res.json({
       exito: true,
