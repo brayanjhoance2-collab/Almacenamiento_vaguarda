@@ -4,6 +4,35 @@ const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
 
+const getMimeType = (filename) => {
+  const ext = path.extname(filename).toLowerCase();
+  const mimeTypes = {
+    '.pdf': 'application/pdf',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.ppt': 'application/vnd.ms-powerpoint',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.txt': 'text/plain',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.bmp': 'image/bmp',
+    '.webp': 'image/webp',
+    '.mp4': 'video/mp4',
+    '.avi': 'video/x-msvideo',
+    '.mov': 'video/quicktime',
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+    '.zip': 'application/zip',
+    '.rar': 'application/x-rar-compressed',
+    '.7z': 'application/x-7z-compressed',
+  };
+  return mimeTypes[ext] || 'application/octet-stream';
+};
+
 exports.uploadFile = async (req, res) => {
   try {
     if (!req.files || !req.files.file) {
@@ -34,13 +63,15 @@ exports.uploadFile = async (req, res) => {
     const fileId = uuidv4();
     const fileExtension = path.extname(file.name);
     const fileName = `${usuario_id}/${fileId}${fileExtension}`;
+    
+    const detectedMimeType = getMimeType(file.name);
 
     await minioClient.fPutObject(
       'user-files',
       fileName,
       file.tempFilePath,
       {
-        'Content-Type': file.mimetype,
+        'Content-Type': detectedMimeType,
         'x-amz-meta-original-name': file.name
       }
     );
@@ -51,7 +82,7 @@ exports.uploadFile = async (req, res) => {
       `INSERT INTO archivos_usuario 
       (id, usuario_id, nombre_original, nombre_storage, size, mime_type, bucket) 
       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [fileId, usuario_id, file.name, fileName, file.size, file.mimetype, 'user-files']
+      [fileId, usuario_id, file.name, fileName, file.size, detectedMimeType, 'user-files']
     );
 
     res.json({
@@ -60,7 +91,8 @@ exports.uploadFile = async (req, res) => {
       datos: {
         file_id: fileId,
         nombre: file.name,
-        size: file.size
+        size: file.size,
+        mime_type: detectedMimeType
       }
     });
 
@@ -121,7 +153,7 @@ exports.downloadFile = async (req, res) => {
     const dataStream = await minioClient.getObject(file.bucket, file.nombre_storage);
 
     res.setHeader('Content-Type', file.mime_type);
-    res.setHeader('Content-Disposition', `attachment; filename="${file.nombre_original}"`);
+    res.setHeader('Content-Disposition', `inline; filename="${file.nombre_original}"`);
 
     dataStream.pipe(res);
 
