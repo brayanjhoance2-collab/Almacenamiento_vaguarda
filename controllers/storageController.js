@@ -181,7 +181,8 @@ exports.downloadFile = async (req, res) => {
     const dataStream = await minioClient.getObject(file.bucket, file.nombre_storage);
 
     res.setHeader('Content-Type', file.mime_type);
-    res.setHeader('Content-Disposition', `inline; filename="${file.nombre_original}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.nombre_original)}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
 
     dataStream.pipe(res);
 
@@ -190,6 +191,43 @@ exports.downloadFile = async (req, res) => {
     res.status(500).json({
       exito: false,
       mensaje: 'Error al descargar archivo'
+    });
+  }
+};
+
+exports.previewFile = async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const usuario_id = req.usuario.id;
+
+    const [files] = await db.execute(
+      'SELECT * FROM archivos_usuario WHERE id = ? AND usuario_id = ? AND eliminado = 0',
+      [fileId, usuario_id]
+    );
+
+    if (files.length === 0) {
+      return res.status(404).json({
+        exito: false,
+        mensaje: 'Archivo no encontrado'
+      });
+    }
+
+    const file = files[0];
+
+    const dataStream = await minioClient.getObject(file.bucket, file.nombre_storage);
+
+    res.setHeader('Content-Type', file.mime_type);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.nombre_original)}"`);
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type');
+
+    dataStream.pipe(res);
+
+  } catch (error) {
+    console.error('Error en preview:', error);
+    res.status(500).json({
+      exito: false,
+      mensaje: 'Error al obtener preview'
     });
   }
 };

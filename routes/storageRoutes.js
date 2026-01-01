@@ -10,7 +10,7 @@ router.get('/files', verificarToken, verificarPremium, storageController.listFil
 
 router.get('/download/:fileId', verificarToken, verificarPremium, storageController.downloadFile);
 
-router.get('/preview/:fileId', verificarToken, verificarPremium, storageController.downloadFile);
+router.get('/preview/:fileId', verificarToken, verificarPremium, storageController.previewFile);
 
 router.delete('/delete/:fileId', verificarToken, verificarPremium, storageController.deleteFile);
 
